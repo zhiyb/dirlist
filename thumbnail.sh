@@ -1,13 +1,14 @@
 #!/bin/bash -e
 if [ $# == 1 ]; then
 	dim=128
-	php=ui.php
+	php=index.php
 	file="$@"
 	# Skip if already exists
 	if php $php check "$file"; then
 		exit 0
 	fi
 	# Update thumbnail
+	echo "Update: $file"
 	# -interpolate nearest
 	dim=$(identify -format "%[fx:min($dim,max(w,h))]\n" "$file")
 	dim=$(echo "$dim" | sort -rn | head -n1)
@@ -21,6 +22,6 @@ elif [ $# != 0 ]; then
 	exit 1
 fi
 
-find . -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.tif' \) | while read f; do
+find -L . -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.tif' -o -iname '*.heic' \) | while read f; do
 	echo $0 "\"${f#./}\""
 done | parallel

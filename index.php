@@ -5,7 +5,9 @@
 // $dbname = "database";
 require('dbconf.php');
 
-if (!isset($admin)) {
+if (isset($argv)) {
+  $admin = true;
+} if (!isset($admin)) {
   # Only allow LAN IP address to access admin features
   $lan = "192.168.";
   $admin = substr($_SERVER['REMOTE_ADDR'], 0, strlen($lan)) === $lan;
@@ -67,20 +69,25 @@ if (isset($argv)) {
   if ($op == 'check') {
     exit(1);  # Force update
     # Check thumbnail exists
-    $stmt = $GLOBALS["db"]->prepare('SELECT `access` FROM `files` WHERE `pid` = ? AND `inode` = ? AND `thumb` IS NOT NULL');
+    $stmt = $GLOBALS["db"]->prepare('SELECT LENGTH(`thumb`) FROM `files` WHERE `pid` = ? AND `inode` = ? AND `thumb` IS NOT NULL');
     $stmt->bind_param('ii', $pid, $inode);
     if ($stmt->execute() !== true) {
       echo($stmt->error);
       exit(1);
     }
     $res = $stmt->get_result()->fetch_row();
-    exit((int)($res == null));
+    exit((int)($res == null || $res[0] == 0));
   } else if ($op == 'update') {
     # Update thumbnail
-    $name = dirname($path);
     $thumb = file_get_contents("php://stdin");
-    $stmt = $GLOBALS["db"]->prepare('INSERT INTO `files` (`pid`, `inode`, `name`, `thumb`) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE thumb = ?');
-    $stmt->bind_param('iisss', $pid, $inode, $name, $thumb, $thumb);
+    if (empty($thumb)) {
+      echo("Empty data");
+      exit(1);
+    }
+    $name = basename($path);
+    $stmt = $GLOBALS["db"]->prepare('INSERT INTO `files` (`pid`, `inode`, `name`, `thumb`) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `thumb` = VALUES(`thumb`)');
+    $stmt->bind_param('iisb', $pid, $inode, $name, $null);
+    $stmt->send_long_data(3, $thumb);
     if ($stmt->execute() !== true) {
       echo($stmt->error);
       exit(1);
@@ -204,7 +211,7 @@ if ($pid == 0)
   $pid = get_from_path($path)['pid'];
 
 # HTML start
-ob_start("ob_gzhandler");
+ob_start("ob_gzhandler", 4 * 1024 * 1024);
 ?>
 
 <!DOCTYPE html>
@@ -327,7 +334,7 @@ function print_object($pid, $objpath, $name, $target, $table, $size, $ignore = f
       //echo('<a href="?toggle&pid=' . $pid . '&inode=' . $inode . '" role="button" class="btn ' . $btn . '"><i class="fa ' . $eye . '"></i></a>');
     echo('</div></td>');
   }
-  echo('<td>' . $thumb . '</td><td class="text-left align-middle"><a href="' . $target . '">' . $name . '</a></td><td class="text-right align-middle"><script>document.write(ts_str(' . $time . '));</script></td><td class="text-right align-middle">' . $size . '</td>');
+  echo('<td class="text-right">' . $thumb . '</td><td class="text-left align-middle"><a href="' . $target . '">' . $name . '</a></td><td class="text-right align-middle"><script>document.write(ts_str(' . $time . '));</script></td><td class="text-right align-middle">' . $size . '</td>');
   echo('</tr>');
 }
 
@@ -366,6 +373,10 @@ foreach (scandir($path) as $object) {
   else
     array_push($files, $object);
 }
+
+$ndirs = count($dirs) - 1;
+$nfiles = count($files);
+echo($ndirs . ($ndirs == 1 ? " directory, " : " directories, ") . $nfiles . ($nfiles == 1 ? " file" : " files"));
 
 foreach ($dirs as $object) {
   if ($path === ".")
