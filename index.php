@@ -1,12 +1,15 @@
 <?php
-if (!isset($admin))
-  $admin = false;
-
 // $dbuser = "user";
 // $dbhost = "localhost";
 // $dbpw = "password";
 // $dbname = "database";
 require('dbconf.php');
+
+if (!isset($admin)) {
+  # Only allow LAN IP address to access admin features
+  $lan = "192.168.";
+  $admin = substr($_SERVER['REMOTE_ADDR'], 0, strlen($lan)) === $lan;
+}
 
 $db = new mysqli($dbhost, $dbuser, $dbpw, $dbname);
 if ($db->connect_error) {
