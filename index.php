@@ -67,7 +67,7 @@ if (isset($argv)) {
     exit(1);
   $pid = get_from_path(dirname($path))['pid'];
   if ($op == 'check') {
-    exit(1);  # Force update
+    #exit(1);  # Force update
     # Check thumbnail exists
     $stmt = $GLOBALS["db"]->prepare('SELECT LENGTH(`thumb`) FROM `files` WHERE `pid` = ? AND `inode` = ? AND `thumb` IS NOT NULL');
     $stmt->bind_param('ii', $pid, $inode);
