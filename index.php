@@ -139,6 +139,11 @@ else if (isset($_GET['p']))
 else
   $path = '.';
 
+if (empty($path)) {
+  http_response_code(404);
+  die();
+}
+
 # Do not allow parent directories, but allow symlinks
 # https://www.php.net/manual/en/function.realpath.php#84012
 function get_abs_path($path) {
