@@ -1,10 +1,11 @@
 #!/bin/bash -e
+php=index.php
+
 if [ $# == 1 ]; then
 	dim=128
-	php=index.php
 	file="$@"
 	# Skip if already exists
-	if php $php check "$file"; then
+	if php $php thumb-check "$file"; then
 		exit 0
 	fi
 	# Update thumbnail
@@ -16,11 +17,14 @@ if [ $# == 1 ]; then
 		echo "Failed: $file"
 		exit 1
 	fi
-	convert "$@" -auto-orient -strip -resize ${dim}x${dim} JPEG:- | php $php update "$file"
+	convert "$@" -auto-orient -strip -resize ${dim}x${dim} JPEG:- | php $php thumb-update "$file"
 	exit
 elif [ $# != 0 ]; then
 	exit 1
 fi
+
+# Update database
+php $php update
 
 find -L . -xtype f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.tif' -o -iname '*.heic' \) | while read f; do
 	echo $0 "\"${f#./}\""

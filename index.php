@@ -18,7 +18,7 @@ if ($db->connect_error) {
   http_response_code(500);
   die("Connection failed: " . $db->connect_error . "\n");
 }
-$db->query('SET CHARACTER SET utf8');
+$db->set_charset('utf8mb4');
 
 # Query path from database
 function get_from_pid($pid) {
@@ -56,19 +56,93 @@ function get_from_path($path, $new = true) {
   return $res;
 }
 
+# _fileinode using lstat
+function _fileinode($path)
+{
+  $res = lstat($path);
+  if ($res === false)
+    return false;
+  return $res['ino'];
+}
+
 if (isset($argv)) {
   # Command line access
-  if (count($argv) != 3)
+  if (count($argv) < 2)
     exit(1);
   $op = $argv[1];
-  $path = $argv[2];
-  $inode = fileinode($path);
-  if ($inode === false)
-    exit(1);
-  $pid = get_from_path(dirname($path))['pid'];
-  if ($op == 'check') {
+  if ($op == 'update') {
+    $stmt = $GLOBALS["db"]->prepare('SELECT `pid`, `path` FROM `paths`');
+    if ($stmt->execute() !== true) {
+      echo($stmt->error);
+      exit(1);
+    }
+
+    foreach ($stmt->get_result()->fetch_all() as $entry) {
+      $pid = $entry[0];
+      $path = $entry[1];
+      if (!is_dir($path)) {
+        echo("Non-existent path deleted: " . $path . "\n");
+        $stmt = $GLOBALS["db"]->prepare('DELETE FROM `paths` WHERE `pid` = ?');
+        $stmt->bind_param('i', $pid);
+        if ($stmt->execute() !== true) {
+          echo($stmt->error);
+          exit(1);
+        }
+      } else {
+        $stmt = $GLOBALS["db"]->prepare('SELECT `inode`, `name` FROM `files` WHERE `pid` = ?');
+        $stmt->bind_param('i', $pid);
+        if ($stmt->execute() !== true) {
+          echo($stmt->error);
+          exit(1);
+        }
+
+        $inodes = [];
+        $files = [];
+        foreach (scandir($path) as $name) {
+          if ($name === "." || $name == "..")
+            continue;
+          $inode = _fileinode($path . DIRECTORY_SEPARATOR . $name);
+          if ($inode === false)
+            continue;
+          array_push($inodes, $inode);
+          $files[$inode] = $name;
+        }
+
+        foreach ($stmt->get_result()->fetch_all() as $entry) {
+          $inode = $entry[0];
+          $name = $entry[1];
+          $file = $path . DIRECTORY_SEPARATOR . $name;
+          if (!in_array($inode, $inodes)) {
+            echo("Non-existent file deleted: " . $inode . "\t" . $file . "\n");
+            $stmt = $GLOBALS["db"]->prepare('DELETE FROM `files` WHERE `pid` = ? AND `inode` = ?');
+            $stmt->bind_param('ii', $pid, $inode);
+            if ($stmt->execute() !== true) {
+              echo($stmt->error);
+              exit(1);
+            }
+          } else if ($name != $files[$inode]) {
+            $fname = $files[$inode];
+            echo("Mismatched file entry corrected: " . $inode . "\t" . $file . " -> " . $fname . "\n");
+            $stmt = $GLOBALS["db"]->prepare('UPDATE `files` SET `name` = ? WHERE `pid` = ? AND `inode` = ?');
+            $stmt->bind_param('sii', $fname, $pid, $inode);
+            if ($stmt->execute() !== true) {
+              echo($stmt->error);
+              exit(1);
+            }
+          }
+        }
+      }
+    }
+    exit(0);
+  } else if ($op == 'thumb-check') {
     #exit(1);  # Force update
     # Check thumbnail exists
+    $path = $argv[2];
+    $inode = _fileinode($path);
+    if ($inode === false)
+      exit(1);
+    $pid = get_from_path(dirname($path))['pid'];
+
     $stmt = $GLOBALS["db"]->prepare('SELECT LENGTH(`thumb`) FROM `files` WHERE `pid` = ? AND `inode` = ? AND `thumb` IS NOT NULL');
     $stmt->bind_param('ii', $pid, $inode);
     if ($stmt->execute() !== true) {
@@ -77,14 +151,21 @@ if (isset($argv)) {
     }
     $res = $stmt->get_result()->fetch_row();
     exit((int)($res == null || $res[0] == 0));
-  } else if ($op == 'update') {
+  } else if ($op == 'thumb-update') {
     # Update thumbnail
+    $path = $argv[2];
+    $name = basename($path);
+    $inode = _fileinode($path);
+    if ($inode === false)
+      exit(1);
+    $pid = get_from_path(dirname($path))['pid'];
+
     $thumb = file_get_contents("php://stdin");
     if (empty($thumb)) {
       echo("Empty data");
       exit(1);
     }
-    $name = basename($path);
+
     $stmt = $GLOBALS["db"]->prepare('INSERT INTO `files` (`pid`, `inode`, `name`, `thumb`) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `thumb` = VALUES(`thumb`)');
     $stmt->bind_param('iisb', $pid, $inode, $name, $null);
     $stmt->send_long_data(3, $thumb);
@@ -185,7 +266,7 @@ function check_access($pid, $inode) {
 if (!$admin) {
   $objpath = $path;
   while ($objpath != '.') {
-    $inode = fileinode($objpath);
+    $inode = _fileinode($objpath);
     $object = basename($objpath);
     $objpath = dirname($objpath);
     $objpid = get_from_path($objpath)['pid'];
@@ -288,7 +369,7 @@ function get_from_inode($pid, $inode, $name) {
 
 function print_object($pid, $objpath, $name, $target, $table, $size, $ignore = false) {
   $time = filemtime($objpath);
-  $inode = fileinode($objpath);
+  $inode = _fileinode($objpath);
   if ($ignore) {
     $thumb = null;
   } else {
@@ -351,7 +432,7 @@ foreach (scandir($path) as $object) {
   # Check file permissions
   if (!is_readable($objpath))
     continue;
-  $inode = fileinode($objpath);
+  $inode = _fileinode($objpath);
   if (!$admin && in_array($inode, $denied))
     continue;
   if(is_dir($objpath))
