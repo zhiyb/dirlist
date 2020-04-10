@@ -43,7 +43,7 @@ function get_from_new_path($path) {
 }
 
 # Query path ID from database
-function get_from_path($path) {
+function get_from_path($path, $new = true) {
   $stmt = $GLOBALS["db"]->prepare('SELECT * FROM `paths` WHERE `path` = ?');
   $stmt->bind_param('s', $path);
   if ($stmt->execute() !== true) {
@@ -51,7 +51,7 @@ function get_from_path($path) {
     die($stmt->error);
   }
   $res = $stmt->get_result()->fetch_assoc();
-  if ($res == null)
+  if ($res === null && $new)
     return get_from_new_path($path);
   return $res;
 }
@@ -132,41 +132,25 @@ if (isset($_GET['access'])) {
 $pid = 0;
 if (isset($_GET['pid']))
   $pid = $_GET['pid'];
-if ($pid != 0)
-  $path = get_from_pid($pid)['path'];
-else if (isset($_GET['p']))
-  $path = $_GET['p'];
-else
-  $path = '.';
-
-if (empty($path)) {
-  http_response_code(404);
-  die();
-}
-
-# Do not allow parent directories, but allow symlinks
-# https://www.php.net/manual/en/function.realpath.php#84012
-function get_abs_path($path) {
-  $path = str_replace(array('/', '\\'), DIRECTORY_SEPARATOR, $path);
-  $parts = array_filter(explode(DIRECTORY_SEPARATOR, $path), 'strlen');
-  $absolutes = array();
-  foreach ($parts as $part) {
-      if ('.' == $part) continue;
-      if ('..' == $part) {
-          array_pop($absolutes);
-      } else {
-          $absolutes[] = $part;
-      }
+if ($pid != 0) {
+  $res = get_from_pid($pid);
+  if ($res == null) {
+    http_response_code(404);
+    die();
   }
-  return implode(DIRECTORY_SEPARATOR, $absolutes);
-}
-
-# Do not allow access outside of php file directory
-$pwd = get_abs_path('');
-$cwd = get_abs_path($path);
-if (substr($cwd, 0, strlen($pwd)) !== $pwd) {
-  http_response_code(403);
-  die();
+  $path = $res['path'];
+} else if (isset($_GET['p'])) {
+  // Legacy direct path query support, only allow known path records
+  $path = $_GET['p'];
+  $res = get_from_path($path, false);
+  if ($res == null) {
+    http_response_code(404);
+    die();
+  }
+  $pid = $res['pid'];
+} else {
+  $path = '.';
+  $pid = get_from_path($path)['pid'];
 }
 
 if (!file_exists($path)) {
@@ -211,9 +195,6 @@ if (!$admin) {
     }
   }
 }
-
-if ($pid == 0)
-  $pid = get_from_path($path)['pid'];
 
 # HTML start
 ob_start("ob_gzhandler", 4 * 1024 * 1024);
