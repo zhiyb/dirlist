@@ -7,7 +7,7 @@ require('dbconf.php');
 
 if (isset($argv)) {
   $admin = true;
-} if (!isset($admin)) {
+} else if (!isset($admin)) {
   # Only allow LAN IP address to access admin features
   $lan = "192.168.";
   $admin = substr($_SERVER['REMOTE_ADDR'], 0, strlen($lan)) === $lan;

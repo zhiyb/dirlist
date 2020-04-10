@@ -22,6 +22,6 @@ elif [ $# != 0 ]; then
 	exit 1
 fi
 
-find -L . -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.tif' -o -iname '*.heic' \) | while read f; do
+find -L . -xtype f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.tif' -o -iname '*.heic' \) | while read f; do
 	echo $0 "\"${f#./}\""
 done | parallel
