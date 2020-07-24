@@ -5,6 +5,9 @@
 // $dbname = "database";
 require('dbconf.php');
 
+$special = array();
+include('config.php');
+
 if (isset($argv)) {
   $admin = true;
 } else if (!isset($admin)) {
@@ -263,7 +266,7 @@ function check_access($pid, $inode) {
   return $res[0];
 }
 
-if (!$admin) {
+if (!$admin && !in_array($pid, $special)) {
   $objpath = $path;
   while ($objpath != '.') {
     $inode = _fileinode($objpath);
