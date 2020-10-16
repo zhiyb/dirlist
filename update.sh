@@ -26,6 +26,6 @@ fi
 # Update database
 php $php update
 
-find -L . -xtype f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.tif' -o -iname '*.heic' \) | while read f; do
+find -L . -xtype f \( -iname '*.jp*g' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.tif' -o -iname '*.heic' \) | while read f; do
 	echo $0 "\"${f#./}\""
 done | parallel

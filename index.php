@@ -1,12 +1,11 @@
 <?php
+$special = array();
+
 // $dbuser = "user";
 // $dbhost = "localhost";
 // $dbpw = "password";
 // $dbname = "database";
-require('dbconf.php');
-
-$special = array();
-include('config.php');
+require('config.php');
 
 if (isset($argv)) {
   $admin = true;
@@ -283,7 +282,6 @@ if (!$admin && !in_array($pid, $special)) {
 # HTML start
 ob_start("ob_gzhandler", 4 * 1024 * 1024);
 ?>
-
 <!DOCTYPE html>
 <html>
 <head>
